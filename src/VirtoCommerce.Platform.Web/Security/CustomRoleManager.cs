@@ -76,10 +76,12 @@ namespace VirtoCommerce.Platform.Web.Security
             var result = await base.CreateAsync(role);
             if (result.Succeeded && !role.Permissions.IsNullOrEmpty())
             {
+                //Need to use an existing tracked by EF entity in order to add permissions
+                var existRole = await base.FindByIdAsync(role.Id);
                 var permissionRoleClaims = role.Permissions.Select(x => new Claim(PlatformConstants.Security.Claims.PermissionClaimType, x.Name));
                 foreach (var claim in permissionRoleClaims)
                 {
-                    await base.AddClaimAsync(role, claim);
+                    await base.AddClaimAsync(existRole, claim);
                 }
                 SecurityCacheRegion.ExpireRegion();
             }
