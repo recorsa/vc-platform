@@ -12,6 +12,7 @@ using VirtoCommerce.Platform.Core.Events;
 using VirtoCommerce.Platform.Core.ExportImport;
 using VirtoCommerce.Platform.Core.Modularity;
 using VirtoCommerce.Platform.Core.Security;
+using VirtoCommerce.Platform.Core.Security.Search;
 using VirtoCommerce.Platform.Core.Settings;
 
 namespace VirtoCommerce.Platform.Data.ExportImport
@@ -28,11 +29,23 @@ namespace VirtoCommerce.Platform.Data.ExportImport
         private readonly IDynamicPropertyService _dynamicPropertyService;
         private readonly IDynamicPropertySearchService _dynamicPropertySearchService;
         private readonly IPermissionsRegistrar _permissionsProvider;
+        private readonly IUserApiKeyService _userApiKeyService;
+        private readonly IUserApiKeySearchService _userApiKeySearchService;
         private readonly IDynamicPropertyDictionaryItemsService _dynamicPropertyDictionaryItemsService;
         private readonly IDynamicPropertyDictionaryItemsSearchService _dynamicPropertyDictionaryItemsSearchService;
 
-        public PlatformExportImportManager(UserManager<ApplicationUser> userManager, RoleManager<Role> roleManager, IPermissionsRegistrar permissionsProvider, ISettingsManager settingsManager,
-                IDynamicPropertyService dynamicPropertyService, IDynamicPropertySearchService dynamicPropertySearchService, ILocalModuleCatalog moduleCatalog, IDynamicPropertyDictionaryItemsService dynamicPropertyDictionaryItemsService, IDynamicPropertyDictionaryItemsSearchService dynamicPropertyDictionaryItemsSearchService)
+        public PlatformExportImportManager(
+            UserManager<ApplicationUser> userManager
+            , RoleManager<Role> roleManager
+            , IPermissionsRegistrar permissionsProvider
+            , ISettingsManager settingsManager
+            , IDynamicPropertyService dynamicPropertyService
+            , IDynamicPropertySearchService dynamicPropertySearchService
+            , ILocalModuleCatalog moduleCatalog
+            , IDynamicPropertyDictionaryItemsService dynamicPropertyDictionaryItemsService
+            , IDynamicPropertyDictionaryItemsSearchService dynamicPropertyDictionaryItemsSearchService
+            , IUserApiKeyService userApiKeyService
+            , IUserApiKeySearchService userApiKeySearchService)
         {
             _dynamicPropertyService = dynamicPropertyService;
             _userManager = userManager;
@@ -43,6 +56,8 @@ namespace VirtoCommerce.Platform.Data.ExportImport
             _dynamicPropertyDictionaryItemsSearchService = dynamicPropertyDictionaryItemsSearchService;
             _permissionsProvider = permissionsProvider;
             _dynamicPropertySearchService = dynamicPropertySearchService;
+            _userApiKeyService = userApiKeyService;
+            _userApiKeySearchService = userApiKeySearchService;
         }
 
         #region IPlatformExportImportManager Members
@@ -102,7 +117,7 @@ namespace VirtoCommerce.Platform.Data.ExportImport
             }
         }
 
-        public async Task ImportAsync(Stream stream, PlatformExportManifest manifest, Action<ExportImportProgressInfo> progressCallback, ICancellationToken cancellationToken)
+        public async Task ImportAsync(Stream inputStream, PlatformExportManifest manifest, Action<ExportImportProgressInfo> progressCallback, ICancellationToken cancellationToken)
         {
             if (manifest == null)
             {
@@ -113,7 +128,7 @@ namespace VirtoCommerce.Platform.Data.ExportImport
             progressInfo.Description = "Starting platform import...";
             progressCallback(progressInfo);
 
-            using (var zipArchive = new ZipArchive(stream, ZipArchiveMode.Read, true))
+            using (var zipArchive = new ZipArchive(inputStream, ZipArchiveMode.Read, true))
             using (EventSuppressor.SupressEvents())
             {
                 //Import selected platform entries
@@ -136,7 +151,7 @@ namespace VirtoCommerce.Platform.Data.ExportImport
             {
                 using (var stream = platformZipEntries.Open())
                 {
-                    using (var streamReader = new StreamReader(stream))
+                    var streamReader = new StreamReader(stream);
                     using (var reader = new JsonTextReader(streamReader))
                     {
                         while (reader.Read())
@@ -150,13 +165,20 @@ namespace VirtoCommerce.Platform.Data.ExportImport
                                         {
                                             foreach (var role in items)
                                             {
-                                                if (await _roleManager.RoleExistsAsync(role.Name))
+                                                var roleExists = string.IsNullOrEmpty(role.Id) ? await _roleManager.RoleExistsAsync(role.Name) :
+                                                                 await _roleManager.FindByIdAsync(role.Id) != null;
+                                                IdentityResult result;
+                                                if (!roleExists)
                                                 {
-                                                    await _roleManager.UpdateAsync(role);
+                                                    result = await _roleManager.CreateAsync(role);
                                                 }
                                                 else
                                                 {
-                                                    await _roleManager.CreateAsync(role);
+                                                    result = await _roleManager.UpdateAsync(role);
+                                                }
+                                                if (!result.Succeeded)
+                                                {
+                                                    progressInfo.Errors.AddRange(result.Errors.Select(x => x.Description));
                                                 }
                                             }
                                         }, processedCount =>
@@ -171,14 +193,19 @@ namespace VirtoCommerce.Platform.Data.ExportImport
                                         {
                                             foreach (var user in items)
                                             {
+                                                IdentityResult result;
                                                 var userExist = await _userManager.FindByIdAsync(user.Id);
                                                 if (userExist != null)
                                                 {
-                                                    await _userManager.UpdateAsync(user);
+                                                    result = await _userManager.UpdateAsync(user);
                                                 }
                                                 else
                                                 {
-                                                    await _userManager.CreateAsync(user);
+                                                    result = await _userManager.CreateAsync(user);
+                                                }
+                                                if (!result.Succeeded)
+                                                {
+                                                    progressInfo.Errors.AddRange(result.Errors.Select(x => x.Description));
                                                 }
                                             }
                                         }, processedCount =>
@@ -222,6 +249,15 @@ namespace VirtoCommerce.Platform.Data.ExportImport
                                         progressCallback(progressInfo);
                                     }, cancellationToken);
                                 }
+                                else if (manifest.HandleSecurity && reader.Value.ToString() == "UserApiKeys")
+                                {
+                                    await reader.DeserializeJsonArrayWithPagingAsync<UserApiKey>(jsonSerializer, batchSize,
+                                        items => _userApiKeyService.SaveApiKeysAsync(items.ToArray()), processedCount =>
+                                        {
+                                            progressInfo.Description = $"{ processedCount } api keys have been imported";
+                                            progressCallback(progressInfo);
+                                        }, cancellationToken);
+                                }
                             }
                         }
                     }
@@ -245,6 +281,7 @@ namespace VirtoCommerce.Platform.Data.ExportImport
 
                     if (manifest.HandleSecurity)
                     {
+                        #region Roles
                         progressInfo.Description = "Roles exporting...";
                         progressCallback(progressInfo);
                         cancellationToken.ThrowIfCancellationRequested();
@@ -255,12 +292,10 @@ namespace VirtoCommerce.Platform.Data.ExportImport
                         var roles = _roleManager.Roles.ToList();
                         if (_roleManager.SupportsRoleClaims)
                         {
-                            var permissions = _permissionsProvider.GetAllPermissions().ToArray();
                             foreach (var role in roles)
                             {
-                                role.Permissions = (await _roleManager.GetClaimsAsync(role)).Join(permissions, c => c.Value, p => p.Name, (c, p) => p).ToArray();
-
-                                serializer.Serialize(writer, role);
+                                var fullyLoadedRole = await _roleManager.FindByIdAsync(role.Id);
+                                serializer.Serialize(writer, fullyLoadedRole);
                             }
 
                             writer.Flush();
@@ -269,9 +304,11 @@ namespace VirtoCommerce.Platform.Data.ExportImport
                         }
 
                         await writer.WriteEndArrayAsync();
+                        #endregion
 
                         cancellationToken.ThrowIfCancellationRequested();
 
+                        #region Users
                         await writer.WritePropertyNameAsync("Users");
                         await writer.WriteStartArrayAsync();
                         var usersResult = _userManager.Users.ToArray();
@@ -294,6 +331,30 @@ namespace VirtoCommerce.Platform.Data.ExportImport
                         progressCallback(progressInfo);
 
                         await writer.WriteEndArrayAsync();
+                        #endregion
+
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        #region UserApiKeys
+                        await writer.WritePropertyNameAsync("UserApiKeys");
+                        await writer.WriteStartArrayAsync();
+
+                        progressInfo.Description = "User Api keys: load keys...";
+                        progressCallback(progressInfo);
+
+                        var apiKeys = (await _userApiKeySearchService.SearchUserApiKeysAsync(new UserApiKeySearchCriteria { Take = int.MaxValue })).Results;
+                        foreach (var apiKey in apiKeys)
+                        {
+                            serializer.Serialize(writer, apiKey);
+                        }
+
+                        progressInfo.Description = $"User Api keys have been exported";
+                        progressCallback(progressInfo);
+                        await writer.WriteEndArrayAsync();
+
+                        #endregion
+
+
                     }
 
                     if (manifest.HandleSettings)

@@ -39,7 +39,7 @@
         <PackageReference Include="OpenIddict" Version="2.0.1" />
         <PackageReference Include="OpenIddict.Core" Version="2.0.1" />
         <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="2.0.1" />
-        <PackageReference Include="Swashbuckle.AspNetCore" Version="5.0.0" />
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="5.1.0" />
         <PackageReference Include="Swashbuckle.AspNetCore.Cli" Version="4.0.1" />
         <PackageReference Include="Swashbuckle.AspNetCore.Filters" Version="5.0.2" />
         <PackageReference Include="System.Security.Cryptography.Algorithms" Version="4.3.1" />
@@ -70,7 +70,7 @@
         <None Remove="wwwroot\cms-content\**" />
         <None Remove="App_Data\Modules\**" />
     </ItemGroup>
-
+   
     <ItemGroup>
         <EmbeddedResource Include="wwwroot\swagger\index.html" />
         <None Include="wwwroot\swagger\logo_small.png" />

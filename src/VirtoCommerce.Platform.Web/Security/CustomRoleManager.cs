@@ -76,11 +76,11 @@ namespace VirtoCommerce.Platform.Web.Security
             var result = await base.CreateAsync(role);
             if (result.Succeeded && !role.Permissions.IsNullOrEmpty())
             {
-                //Need to use an existing tracked by EF entity in order to add permissions
-                var existRole = await base.FindByIdAsync(role.Id);
+                var existRole = string.IsNullOrEmpty(role.Id) ?  await base.FindByNameAsync(role.Name) : await base.FindByIdAsync(role.Id);
                 var permissionRoleClaims = role.Permissions.Select(x => new Claim(PlatformConstants.Security.Claims.PermissionClaimType, x.Name));
                 foreach (var claim in permissionRoleClaims)
                 {
+                    //Need to use an existing tracked by EF entity in order to add permissions for role
                     await base.AddClaimAsync(existRole, claim);
                 }
                 SecurityCacheRegion.ExpireRegion();
@@ -156,8 +156,8 @@ namespace VirtoCommerce.Platform.Web.Security
                     if (knownPermission != null)
                     {
                         knownPermission.Patch(storedPermission);
-                        role.Permissions.Add(storedPermission);
                     }
+                    role.Permissions.Add(storedPermission);
                 }
             }
         }

@@ -38,10 +38,12 @@ namespace VirtoCommerce.Platform.Web.Controllers.Api
         private readonly IPasswordCheckService _passwordCheckService;
         private readonly IEmailSender _emailSender;
         private readonly IEventPublisher _eventPublisher;
+        private readonly IUserApiKeyService _userApiKeyService;
 
         public SecurityController(SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager, RoleManager<Role> roleManager,
                 IPermissionsRegistrar permissionsProvider, IUserSearchService userSearchService, IRoleSearchService roleSearchService,
-                IOptions<Core.Security.AuthorizationOptions> securityOptions, IPasswordCheckService passwordCheckService, IEmailSender emailSender, IEventPublisher eventPublisher)
+                IOptions<Core.Security.AuthorizationOptions> securityOptions, IPasswordCheckService passwordCheckService, IEmailSender emailSender,
+                IEventPublisher eventPublisher, IUserApiKeyService userApiKeyService)
         {
             _signInManager = signInManager;
             _userManager = userManager;
@@ -53,6 +55,7 @@ namespace VirtoCommerce.Platform.Web.Controllers.Api
             _roleSearchService = roleSearchService;
             _emailSender = emailSender;
             _eventPublisher = eventPublisher;
+            _userApiKeyService = userApiKeyService;
         }
 
         /// <summary>
@@ -118,17 +121,10 @@ namespace VirtoCommerce.Platform.Web.Controllers.Api
                 Id = user.Id,
                 isAdministrator = user.IsAdministrator,
                 UserName = user.UserName,
-                PasswordExpired = user.PasswordExpired
+                PasswordExpired = user.PasswordExpired,
+                Permissions = user.Roles.SelectMany(x => x.Permissions).Select(x => x.Name).Distinct().ToArray()
             };
-            var roleNames = await _userManager.GetRolesAsync(user);
-            foreach (var roleName in roleNames)
-            {
-                var role = await _roleManager.FindByNameAsync(roleName);
-                if (!role.Permissions.IsNullOrEmpty())
-                {
-                    result.Permissions.AddRange(role.Permissions.Select(x => x.Name));
-                }
-            }
+
             return Ok(result);
         }
 
@@ -622,6 +618,25 @@ namespace VirtoCommerce.Platform.Web.Controllers.Api
         }
 
         /// <summary>
+        /// Lock user
+        /// </summary>
+        /// <param name="id">>User id</param>
+        /// <returns></returns>
+        [HttpPost]
+        [Route("users/{id}/lock")]
+        [Authorize(PlatformConstants.Security.Permissions.SecurityUpdate)]
+        public async Task<ActionResult<SecurityResult>> LockUser([FromRoute] string id)
+        {
+            var user = await _userManager.FindByIdAsync(id);
+            if (user != null)
+            {
+                var result = await _userManager.SetLockoutEndDateAsync(user, DateTime.MaxValue);
+                return Ok(result.ToSecurityResult());
+            }
+            return Ok(IdentityResult.Failed().ToSecurityResult());
+        }
+
+        /// <summary>
         /// Unlock user
         /// </summary>
         /// <param name="id">>User id</param>
@@ -640,6 +655,34 @@ namespace VirtoCommerce.Platform.Web.Controllers.Api
             }
             return Ok(IdentityResult.Failed().ToSecurityResult());
         }
+
+        [HttpGet]
+        [Route("users/{id}/apikeys")]
+        [Authorize(PlatformConstants.Security.Permissions.SecurityQuery)]
+        public async Task<ActionResult<UserApiKey[]>> GetUserApiKeys([FromRoute] string id)
+        {
+            var result = await _userApiKeyService.GetAllUserApiKeysAsync(id);          
+            return Ok(result);
+        }
+
+        [HttpPost, HttpPut]
+        [Route("users/apikeys")]
+        [Authorize(PlatformConstants.Security.Permissions.SecurityUpdate)]
+        public async Task<ActionResult<UserApiKey[]>> SaveUserApiKey([FromBody] UserApiKey userApiKey)
+        {
+            await _userApiKeyService.SaveApiKeysAsync(new[] { userApiKey });
+            return Ok();
+        }
+
+        [HttpDelete]
+        [Route("users/apikeys")]
+        [Authorize(PlatformConstants.Security.Permissions.SecurityDelete)]
+        public async Task<ActionResult<UserApiKey[]>> DeleteUserApiKeys([FromQuery] string[] ids)
+        {
+            await _userApiKeyService.DeleteApiKeysAsync(ids);
+            return Ok();
+        }
+
 
         //TODO: Remove later
         #region Obsolete methods
