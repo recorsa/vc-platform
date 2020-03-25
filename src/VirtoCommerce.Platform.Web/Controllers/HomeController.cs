@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -27,6 +28,7 @@ namespace VirtoCommerce.Platform.Web.Controllers
             _licenseProvider = licenseProvider;
         }
 
+        [AllowAnonymous]
         public ActionResult Index()
         {
             var model = new IndexModel

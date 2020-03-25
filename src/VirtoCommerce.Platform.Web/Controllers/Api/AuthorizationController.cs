@@ -8,6 +8,7 @@ using AspNet.Security.OpenIdConnect.Extensions;
 using AspNet.Security.OpenIdConnect.Primitives;
 using AspNet.Security.OpenIdConnect.Server;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -16,6 +17,7 @@ using OpenIddict.Core;
 using OpenIddict.EntityFrameworkCore.Models;
 using VirtoCommerce.Platform.Core;
 using VirtoCommerce.Platform.Core.Security;
+using AuthorizationOptions = VirtoCommerce.Platform.Core.Security.AuthorizationOptions;
 
 namespace Mvc.Server
 {
@@ -48,6 +50,7 @@ namespace Mvc.Server
         // Note: to support non-interactive flows like password,
         // you must provide your own token endpoint action:
 
+        [AllowAnonymous]
         [HttpPost("~/connect/token"), Produces("application/json")]
         public async Task<ActionResult> Exchange(OpenIdConnectRequest openIdConnectRequest)
         {
