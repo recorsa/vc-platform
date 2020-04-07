@@ -71,7 +71,6 @@ namespace VirtoCommerce.Platform.Web
             Configuration = configuration;
             WebHostEnvironment = hostingEnvironment;
         }
-
         public IConfiguration Configuration { get; }
         public IWebHostEnvironment WebHostEnvironment { get; }
 
@@ -173,7 +172,7 @@ namespace VirtoCommerce.Platform.Web
                                       //Add the second ApiKey auth schema to handle api_key in query string
                                       .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationOptions.DefaultScheme, options => { })
                                       .AddCookie();
-             
+
 
             services.AddSecurityServices(options =>
             {
@@ -307,8 +306,8 @@ namespace VirtoCommerce.Platform.Web
 
                     options.DisableScopeValidation();
 
-                    // During development, you can disable the HTTPS requirement.
-                    if (WebHostEnvironment.IsDevelopment())
+                    // During development or when you explicitly run the platform in production mode without https, need to disable the HTTPS requirement.
+                    if (WebHostEnvironment.IsDevelopment() || !Configuration.IsHttpsServerUrlSet())
                     {
                         options.DisableHttpsRequirement();
                     }
@@ -524,3 +523,5 @@ namespace VirtoCommerce.Platform.Web
         }
     }
 }
+
+
