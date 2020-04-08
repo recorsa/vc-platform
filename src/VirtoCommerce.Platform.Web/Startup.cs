@@ -8,8 +8,6 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using AspNet.Security.OpenIdConnect.Primitives;
-using GraphQL.Server;
-using GraphQL.Types;
 using Hangfire;
 using Hangfire.MemoryStorage;
 using Microsoft.AspNetCore.Authentication;
@@ -49,7 +47,6 @@ using VirtoCommerce.Platform.Security.Authorization;
 using VirtoCommerce.Platform.Security.Repositories;
 using VirtoCommerce.Platform.Security.Services;
 using VirtoCommerce.Platform.Web.Azure;
-using VirtoCommerce.Platform.Web.DotNetGraphQL;
 using VirtoCommerce.Platform.Web.Extensions;
 using VirtoCommerce.Platform.Web.Hangfire;
 using VirtoCommerce.Platform.Web.Infrastructure;
@@ -409,9 +406,6 @@ namespace VirtoCommerce.Platform.Web
 
             // Register the Swagger generator
             services.AddSwagger();
-
-            //register GrapQL server with required dependencies
-            services.AddGraphQLServer();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -510,12 +504,6 @@ namespace VirtoCommerce.Platform.Web
             // Enable middleware to serve generated Swagger as a JSON endpoint.
             app.UseSwagger();
 
-
-            // add http for Schema at default url /graphql
-            app.UseGraphQL<ISchema>();
-
-            // use graphql-playground at default url /ui/playground
-            app.UseGraphQLPlayground();
 
             var mvcJsonOptions = app.ApplicationServices.GetService<IOptions<MvcNewtonsoftJsonOptions>>();
             GlobalConfiguration.Configuration.UseSerializerSettings(mvcJsonOptions.Value.SerializerSettings);

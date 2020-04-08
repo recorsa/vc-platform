@@ -128,6 +128,17 @@ namespace VirtoCommerce.Platform.Core.Common
             return result;
         }
 
+        //Returns the actual (overridden) type for requested 
+        public static Type GetActualType<T>() where T : BaseType
+        {
+            var result = FindTypeInfoByName(typeof(T).Name)?.Type;
+            if (result == null)
+            {
+                result = typeof(T);
+            }
+            return result;
+        }
+
         public static TypeInfo<BaseType> FindTypeInfoByName(string typeName)
         {
             //Try find first direct type match from registered types
